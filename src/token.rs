@@ -1,6 +1,6 @@
 use std::fmt::{Result, Formatter, Display, Debug};
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum TokenType {
     ILLEGAL,
     EOF,
@@ -40,11 +40,20 @@ pub enum TokenType {
     IF,
     ELSE,
     RETURN,
+
+    // Default tokens: used to implement Default trait, otherwise not an actual token in Monkey.
+    DEFAULT,
 }
 
 impl Display for TokenType {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         write!(f, "{:?}", self)
+    }
+}
+
+impl Default for TokenType {
+    fn default() -> Self {
+        Self::DEFAULT
     }
 }
 
@@ -54,6 +63,7 @@ impl PartialEq for TokenType {
     }
 }
 
+#[derive(Default, Clone)]
 pub struct Token {
     pub token_type: TokenType,
     pub literal: String,

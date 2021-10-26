@@ -2,6 +2,8 @@ mod token;
 mod lexer;
 mod utils;
 mod repl;
+mod ast;
+mod parser;
 
 use users;
 
