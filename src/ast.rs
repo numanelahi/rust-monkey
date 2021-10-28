@@ -1,5 +1,6 @@
 use std::any::Any;
 use crate::token::Token;
+use std::fmt::{self, Display};
 
 pub trait Node {
     fn token_literal(&self) -> String;
@@ -56,9 +57,34 @@ impl Downcast for LetStatement {
 
 impl Statement for LetStatement{}
 
+pub struct ReturnStatement {
+    pub token: Token,
+    pub value: Box<dyn Expression>,
+}
+
+impl Node for ReturnStatement {
+    fn token_literal(&self) -> String {
+        self.token.literal.clone()
+    }
+}
+
+impl Downcast for ReturnStatement {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+}
+
+impl Statement for ReturnStatement{}
+
 pub struct Identifier {
     pub token: Token,
     pub value: String,
+}
+
+impl Display for Identifier {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "({}, {})", self.token, self.value)
+    }
 }
 
 impl Node for Identifier {
@@ -74,3 +100,4 @@ impl Downcast for Identifier {
 }
 
 impl Expression for Identifier {}
+

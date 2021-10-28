@@ -1,10 +1,11 @@
 use crate::lexer::Lexer;
 use crate::token::{Token, TokenType};
-use crate::ast::{Program, Statement, Identifier, LetStatement, Expression, Node};
+use crate::ast::{Program, Statement, Identifier, LetStatement, ReturnStatement, Expression, Node};
 
 #[derive(Default)]
 struct Parser {
     l: Lexer,
+    errors: Vec<String>,
     current_token: Token,
     peek_token: Token, 
 }
@@ -34,11 +35,16 @@ impl Parser {
         self.peek_token.token_type == expected_type
     }
 
+    fn peek_error(&mut self, expected_type: TokenType) {
+        self.errors.push(format!("Expected next token to be {}, got {} instead", expected_type.to_string(), self.peek_token.token_type.to_string()));
+    }
+
     fn expect_peek(&mut self, expected_token: TokenType) -> bool {
         if expected_token == self.peek_token.token_type {
             self.next_token();
             true
         } else {
+            self.peek_error(expected_token);
             false
         }
     }
@@ -71,9 +77,28 @@ impl Parser {
         }))
     }
 
+    fn parse_return_statement(&mut self) -> Option<Box<dyn Statement>> {
+        let stmt_token: Token = self.current_token.clone();
+
+        self.next_token();
+        while !self.current_token_is(TokenType::SEMICOLON) {
+            self.next_token();
+        }
+
+        let expression = Identifier{
+            token: self.current_token.clone(),
+            value: self.current_token.literal.clone(),
+        };
+        Some(Box::new(ReturnStatement{
+            token: stmt_token,
+            value: Box::new(expression),
+        }))
+    }
+
     fn parse_statement(&mut self) -> Option<Box<dyn Statement>> {
         match self.current_token.token_type {
             TokenType::LET => self.parse_let_statement(),
+            TokenType::RETURN => self.parse_return_statement(),
             _ => None,
         }
     }
@@ -121,6 +146,7 @@ mod test {
         let lex = Lexer::new(input);
         let mut p = Parser::new(lex);
         let program = p.parse_program();
+        check_parser_errors(&p);
 
         let tests = [
             ExpectedIdentifier::new("x"), 
@@ -144,6 +170,39 @@ mod test {
                 let_stmt.name.value == *name && let_stmt.name.token_literal() == *name
             },
             None => false
+        }
+    }
+
+    #[test]
+    fn test_return_statement() {
+        let input = String::from("
+        return 5;
+        return 10;
+        return 10101010;
+        ");
+
+        let l = Lexer::new(input);
+        let mut p = Parser::new(l);
+        let program = p.parse_program();
+        check_parser_errors(&p);
+
+        assert_eq!(program.statements.len(), 3);
+
+        for stmt in program.statements {
+            match stmt.as_any().downcast_ref::<ReturnStatement>() {
+                Some(return_stmt) => {
+                    assert_eq!(return_stmt.token_literal(), "return");
+                },
+                None => {panic!("failed to downcast return statement");},
+            }
+        }
+    }
+
+    fn check_parser_errors(p: &Parser) {
+        assert_eq!(p.errors.len(), 0);
+        println!("Parser has {} errors.", p.errors.len());
+        for err in &p.errors {
+            println!("parser error: {}", *err);
         }
     }
 }
