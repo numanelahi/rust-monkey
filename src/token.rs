@@ -1,6 +1,6 @@
 use std::fmt::{Result, Formatter, Display, Debug};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Hash, Eq)]
 pub enum TokenType {
     ILLEGAL,
     EOF,
