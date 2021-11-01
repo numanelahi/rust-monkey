@@ -491,4 +491,40 @@ mod test {
             }
         }
     }
+
+    struct ComplexExpressions(String, String);
+
+    impl ComplexExpressions {
+        fn new(input: &str, expected: &str) -> Self {
+            ComplexExpressions(input.to_string(), expected.to_string())
+        }
+    }
+
+    #[test]
+    fn test_complex_expressions() {
+        let tests = [
+            ComplexExpressions::new("-a * b", "((-a) * b)"),
+            ComplexExpressions::new("!-a", "(!(-a))"),
+            ComplexExpressions::new("a + b + c", "((a + b) + c)"),
+            ComplexExpressions::new("a + b - c", "((a + b) - c)"),
+            ComplexExpressions::new("a * b * c", "((a * b) * c)"),
+            ComplexExpressions::new("a * b / c", "((a * b) / c)"),
+            ComplexExpressions::new("a + b / c", "(a + (b / c))"),
+            ComplexExpressions::new("a + b * c + d / e - f", "(((a + (b * c)) + (d / e)) - f)"),
+            ComplexExpressions::new("3 + 4; -5 * 5", "(3 + 4)((-5) * 5)"),
+            ComplexExpressions::new("5 > 4 == 3 < 4", "((5 > 4) == (3 < 4))"),
+            ComplexExpressions::new("5 < 4 != 3 > 4", "((5 < 4) != (3 > 4))"),
+            ComplexExpressions::new("3 + 4 * 5 == 3 * 1 + 4 * 5", "((3 + (4 * 5)) == ((3 * 1) + (4 * 5)))")
+        ];
+
+        for test in tests.iter() {
+            let lex = Lexer::new(test.0.clone());
+            let mut parse = Parser::new(lex);
+            let program = parse.parse_program();
+            check_parser_errors(&parse);
+
+            let actual = program.to_string();
+            assert_eq!(actual, test.1);
+        }
+    }
 }
