@@ -1,5 +1,5 @@
 use std::any::Any;
-use crate::token::Token;
+use crate::token::{Token, TokenType};
 use std::fmt::{self, Display};
 
 pub enum ExpressionType {
@@ -15,14 +15,25 @@ pub enum ExpressionType {
 impl ExpressionType {
     pub fn get_value(&self) -> usize {
         match self {
-            LOWEST => 1,
-            EQUALS => 2,
-            LESSGREATER => 3,
-            SUM => 4,
-            PRODUCT => 5,
-            PREFIX => 6,
-            CALL => 7
+            Self::LOWEST => 1,
+            Self::EQUALS => 2,
+            Self::LESSGREATER => 3,
+            Self::SUM => 4,
+            Self::PRODUCT => 5,
+            Self::PREFIX => 6,
+            Self::CALL => 7
         }
+    }
+
+    pub fn get_token_precedence(token_type: TokenType) -> usize {
+        let val = match token_type {
+            TokenType::EQ | TokenType::NOTEQ => Self::EQUALS.get_value(),
+            TokenType::LT | TokenType::GT => Self::LESSGREATER.get_value(),
+            TokenType::PLUS | TokenType::MINUS => Self::SUM.get_value(),
+            TokenType::ASTERISK | TokenType::SLASH => Self::PRODUCT.get_value(),
+            _ => Self::LOWEST.get_value(),
+        };
+        val
     }
 }
 
@@ -223,6 +234,33 @@ impl Downcast for PrefixExpression {
 }
 
 impl Expression for PrefixExpression {}
+
+pub struct InfixExpression {
+    pub token: Token,
+    pub operator: String,
+    pub right: Box<dyn Expression>,
+    pub left: Box<dyn Expression>
+}
+
+impl Display for InfixExpression {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "({} {} {})", self.left, self.operator, self.right)
+    }
+}
+
+impl Node for InfixExpression {
+    fn token_literal(&self) -> String {
+        self.token.literal.clone()
+    } 
+}
+
+impl Downcast for InfixExpression {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+}
+
+impl Expression for InfixExpression {}
 
 #[cfg(test)]
 mod test {

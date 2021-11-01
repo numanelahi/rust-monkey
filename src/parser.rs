@@ -1,21 +1,17 @@
 use crate::lexer::Lexer;
 use crate::token::{Token, TokenType};
 use crate::ast::{Program, Statement, Identifier, LetStatement, ReturnStatement, 
-    ExpressionStatement, IntegerLiteral, PrefixExpression, ExpressionType, Expression, Node};
-use std::collections::HashMap;
+    ExpressionStatement, IntegerLiteral, PrefixExpression, InfixExpression,
+    ExpressionType, Expression, Node};
 
 
-// type prefix_parser_fn = Fn() -> Box<dyn Expression>;
-// type infix_parser_fn = Fn(dyn Expression) -> Box<dyn Expression>;
 
 #[derive(Default)]
-struct Parser {
-    l: Lexer,
-    errors: Vec<String>,
-    current_token: Token,
-    peek_token: Token, 
-    //prefix_parse_fns: HashMap<TokenType, Box<prefix_parser_fn>>,
-    //infix_parse_fns: HashMap<TokenType, Box<infix_parser_fn>>,
+pub struct Parser {
+    pub l: Lexer,
+    pub errors: Vec<String>,
+    pub current_token: Token,
+    pub peek_token: Token,
 }
 
 impl Parser {
@@ -29,14 +25,6 @@ impl Parser {
         p.next_token();
         p
     }
-
-    // fn register_prefix(&mut self, token_type: TokenType, func: Box<prefix_parser_fn>) {
-    //     self.prefix_parse_fns.insert(token_type, func);
-    // }
-
-    // fn register_infix(&mut self, token_type: TokenType, func: Box<infix_parser_fn>) {
-    //     self.infix_parse_fns.insert(token_type, func);
-    // }
 
     fn next_token(&mut self) {
         self.current_token = self.peek_token.clone();
@@ -115,8 +103,8 @@ impl Parser {
         self.errors.push(error);
     } 
 
-    fn parse_prefix_fn_error(&mut self, token_type: TokenType) {
-        self.errors.push(format!("No prefix function found for token {}", token_type));
+    fn parse_fn_error(&mut self, token_type: &TokenType, exp_type: &str) {
+        self.errors.push(format!("No {} function found for token {}", exp_type, token_type));
     }
 
     fn parse_identifier(&self) -> Option<Box<dyn Expression>> {
@@ -145,7 +133,7 @@ impl Parser {
         let token = self.current_token.clone();
         let operator = self.current_token.literal.clone();
         self.next_token();
-        match self.parse_expression(ExpressionType::PREFIX) {
+        match self.parse_expression(ExpressionType::PREFIX.get_value()) {
             Some(right) => {
                 Some(Box::new(PrefixExpression{
                     token,
@@ -157,20 +145,66 @@ impl Parser {
         }       
     }
 
-    fn parse_expression(&mut self, expression_type: ExpressionType) -> Option<Box<dyn Expression>> {
+    fn parse_infix_expression(&mut self, left: Box<dyn Expression>) -> (Option<Box<dyn Expression>>, bool) {
+        self.next_token();
+        let precedence = self.current_precedence();
+        let token = self.current_token.clone();
+        let operator = self.current_token.literal.clone();
+        self.next_token();
+        let right: Option<Box<dyn Expression>> = self.parse_expression(precedence);
+        if right.is_none() {
+            return (Some(left), true)
+        }
+        (Some(Box::new(InfixExpression{
+            token,
+            operator,
+            left,
+            right: right.unwrap(),
+        })), false)
+    }
+
+    fn parse_prefix_fn_expressions(&mut self) -> Option<Box<dyn Expression>> {
         match self.current_token.token_type {
             TokenType::IDENT => self.parse_identifier(),
             TokenType::INT => self.parse_integer_literal(),
             TokenType::MINUS | TokenType::BANG => self.parse_prefix_expression(),
             _ => {
-                self.parse_prefix_fn_error(self.current_token.token_type.clone());
+                self.parse_fn_error(&self.current_token.token_type.clone(), "prefix");
                 None
             },
         }
     }
 
+    fn parse_infix_fn_expressions(&mut self, left: Box<dyn Expression>) -> (Option<Box<dyn Expression>>, bool) {
+        match self.peek_token.token_type {
+            TokenType::PLUS | TokenType::MINUS | TokenType::GT | TokenType::LT |
+            TokenType::SLASH | TokenType::ASTERISK | TokenType::EQ | 
+            TokenType::NOTEQ => self.parse_infix_expression(left),
+            _ => {
+                self.parse_fn_error(&self.peek_token.token_type.clone(), "infix");
+                (Some(left), true)
+            }
+        }
+    }
+
+    fn parse_expression(&mut self, precedence: usize) -> Option<Box<dyn Expression>> {
+        let mut lft_exp: Option<Box<dyn Expression>> = self.parse_prefix_fn_expressions();
+        if lft_exp.is_none() {
+            return None
+        }
+        
+        while !self.peek_token_is(TokenType::SEMICOLON) && self.peek_precendence() > precedence {
+            let (exp, should_stop) = self.parse_infix_fn_expressions(lft_exp.unwrap());
+            if should_stop {
+                return exp
+            }
+            lft_exp = exp
+        } 
+        lft_exp
+    }
+
     fn parse_expression_statement(&mut self) -> Option<Box<dyn Statement>> {
-        let expression = self.parse_expression(ExpressionType::LOWEST);
+        let expression = self.parse_expression(ExpressionType::LOWEST.get_value());
         match expression {
             Some(exp) => {
                 let stmt: Option<Box<dyn Statement>> = Some(Box::new(ExpressionStatement{
@@ -206,6 +240,14 @@ impl Parser {
             self.next_token();
         } 
         program
+    }
+
+    pub fn peek_precendence(&self) -> usize {
+        ExpressionType::get_token_precedence(self.peek_token.token_type.clone())
+    }
+
+    pub fn current_precedence(&self) -> usize {
+        ExpressionType::get_token_precedence(self.current_token.token_type.clone())
     }
 }
 
@@ -393,6 +435,59 @@ mod test {
                     }
                 },
                 None => panic!("Failed to parse expression statement"),
+            }
+        }
+    }
+
+    struct InfixTest {
+        input: String,
+        operator: String,
+        left_value: i64,
+        right_value: i64,
+    }
+
+    impl InfixTest {
+        fn new(input: &str, operator: &str, left_value: i64, right_value: i64) -> Self {
+            Self{
+                input: input.to_string(),
+                operator: operator.to_string(),
+                left_value, 
+                right_value
+            }
+        }
+    }
+
+    #[test]
+    fn test_infix_expression_parsing() {
+        let tests = [
+            InfixTest::new("5 + 5;", "+", 5, 5),
+            InfixTest::new("5 - 5;", "-", 5, 5),
+            InfixTest::new("5 / 5;", "/", 5, 5),
+            InfixTest::new("5 * 5;", "*", 5, 5),
+            InfixTest::new("5 > 5;", ">", 5, 5),
+            InfixTest::new("5 < 5;", "<", 5, 5),
+            InfixTest::new("5 == 5;", "==", 5, 5),
+            InfixTest::new("5 != 5;", "!=", 5, 5),
+        ];
+
+        for test in tests.iter() {
+            let lex = Lexer::new(test.input.clone());
+            let mut parse = Parser::new(lex);
+            let program = parse.parse_program();
+
+            check_parser_errors(&parse);
+            match program.statements[0].as_any().downcast_ref::<ExpressionStatement> () {
+                Some(exp_stmt) => {
+                    match exp_stmt.expression.as_any().downcast_ref::<InfixExpression>() {
+                        Some(infix_exp) => {
+                            assert_eq!(infix_exp.operator, test.operator);
+                            assert_eq!(test_integer_literal(&infix_exp.right, test.right_value), true);
+                            assert_eq!(test_integer_literal(&infix_exp.left, test.left_value), true);
+                        },
+                        None => panic!("failed to downcast an infix expression"),
+                    }
+                },
+                None => panic!("failed to downcast the expression statement"),
             }
         }
     }
