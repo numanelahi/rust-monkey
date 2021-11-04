@@ -2,7 +2,7 @@ use crate::lexer::Lexer;
 use crate::token::{Token, TokenType};
 use crate::ast::{Program, Statement, Identifier, LetStatement, ReturnStatement, 
     ExpressionStatement, IntegerLiteral, PrefixExpression, InfixExpression,
-    ExpressionType, Expression, Node};
+    Boolean, ExpressionType, Expression, Node};
 
 
 
@@ -129,6 +129,24 @@ impl Parser {
         }
     }
 
+    fn parse_boolean(&mut self) -> Option<Box<dyn Expression>> {
+        Some(Box::new(Boolean{
+            token: self.current_token.clone(),
+            value: self.current_token_is(TokenType::TRUE),
+        }))
+    }
+
+    fn parse_grouped_expression(&mut self) -> Option<Box<dyn Expression>> {
+        self.next_token();
+        let exp = self.parse_expression(ExpressionType::LOWEST.get_value());
+        if !self.peek_token_is(TokenType::RPAREN) {
+            None
+        } else {
+            self.next_token();
+            exp
+        } 
+    }
+
     fn parse_prefix_expression(&mut self) -> Option<Box<dyn Expression>> {
         let token = self.current_token.clone();
         let operator = self.current_token.literal.clone();
@@ -168,6 +186,8 @@ impl Parser {
             TokenType::IDENT => self.parse_identifier(),
             TokenType::INT => self.parse_integer_literal(),
             TokenType::MINUS | TokenType::BANG => self.parse_prefix_expression(),
+            TokenType::TRUE | TokenType::FALSE => self.parse_boolean(),
+            TokenType::LPAREN => self.parse_grouped_expression(),
             _ => {
                 self.parse_fn_error(&self.current_token.token_type.clone(), "prefix");
                 None
@@ -264,22 +284,6 @@ mod test {
         fn new(s: &str) -> Self {
             Self {
                 identifier: s.to_string()
-            }
-        }
-    }
-
-    struct PrefixTest {
-        input: String,
-        operator: String,
-        integer_value: i64,
-    }
-
-    impl PrefixTest {
-        fn new(input: &str, operator: &str, integer_value: i64) -> Self {
-            Self {
-                input: input.to_string(),
-                operator: operator.to_string(),
-                integer_value
             }
         }
     }
@@ -410,8 +414,33 @@ mod test {
         }
     }
 
+    fn test_boolean_literal(expression: &Box<dyn Expression>, boolean: bool) -> bool {
+        match expression.as_any().downcast_ref::<Boolean>() {
+            Some(bool_exp) => {
+                bool_exp.value == boolean && bool_exp.token_literal() == boolean.to_string()
+            },
+            None => false,
+        }
+    }
+
+    struct PrefixTest<T> {
+        input: String,
+        operator: String,
+        value: T,
+    }
+
+    impl<T> PrefixTest<T> {
+        fn new(input: &str, operator: &str, value: T) -> Self {
+            Self {
+                input: input.to_string(),
+                operator: operator.to_string(),
+                value
+            }
+        }
+    }
+
     #[test]
-    fn test_prefix_expresssion_parsing() {
+    fn test_int_prefix_expresssion_parsing() {
         let tests = [
             PrefixTest::new("-5;", "-", 5),
             PrefixTest::new("!5", "!", 5),
@@ -429,7 +458,7 @@ mod test {
                     match exp_stmt.expression.as_any().downcast_ref::<PrefixExpression>() {
                         Some(pre_exp) => {
                             assert_eq!(pre_exp.operator, test.operator);
-                            assert_eq!(test_integer_literal(&pre_exp.right, test.integer_value), true);
+                            assert_eq!(test_integer_literal(&pre_exp.right, test.value), true);
                         },
                         None => panic!("Failed to parse prefix expression"),
                     }
@@ -439,15 +468,44 @@ mod test {
         }
     }
 
-    struct InfixTest {
-        input: String,
-        operator: String,
-        left_value: i64,
-        right_value: i64,
+    #[test]
+    fn test_bool_prefix_expresssion_parsing() {
+        let tests = [
+            PrefixTest::new("!true;", "!", true),
+            PrefixTest::new("!false", "!", false),
+        ];
+
+        for test in tests.iter() {
+            let lex = Lexer::new(test.input.clone());
+            let mut parse = Parser::new(lex);
+            let program = parse.parse_program();
+            check_parser_errors(&parse);
+
+            assert_eq!(program.statements.len(), 1);
+            match program.statements[0].as_any().downcast_ref::<ExpressionStatement>() {
+                Some(exp_stmt) => {
+                    match exp_stmt.expression.as_any().downcast_ref::<PrefixExpression>() {
+                        Some(pre_exp) => {
+                            assert_eq!(pre_exp.operator, test.operator);
+                            assert_eq!(test_boolean_literal(&pre_exp.right, test.value), true);
+                        },
+                        None => panic!("Failed to parse prefix expression"),
+                    }
+                },
+                None => panic!("Failed to parse expression statement"),
+            }
+        }
     }
 
-    impl InfixTest {
-        fn new(input: &str, operator: &str, left_value: i64, right_value: i64) -> Self {
+    struct InfixTest<T> {
+        input: String,
+        operator: String,
+        left_value: T,
+        right_value: T,
+    }
+
+    impl<T> InfixTest<T> {
+        fn new(input: &str, operator: &str, left_value: T, right_value: T) -> Self {
             Self{
                 input: input.to_string(),
                 operator: operator.to_string(),
@@ -458,7 +516,7 @@ mod test {
     }
 
     #[test]
-    fn test_infix_expression_parsing() {
+    fn test_int_infix_expression_parsing() {
         let tests = [
             InfixTest::new("5 + 5;", "+", 5, 5),
             InfixTest::new("5 - 5;", "-", 5, 5),
@@ -492,6 +550,36 @@ mod test {
         }
     }
 
+    #[test]
+    fn test_bool_infix_expression_parsing() {
+        let tests = [
+            InfixTest::new("true == true", "==", true, true),
+            InfixTest::new("true != false", "!=", true, false),
+            InfixTest::new("false == false", "==", false, false),
+        ];
+
+        for test in tests.iter() {
+            let lex = Lexer::new(test.input.clone());
+            let mut parse = Parser::new(lex);
+            let program = parse.parse_program();
+
+            check_parser_errors(&parse);
+            match program.statements[0].as_any().downcast_ref::<ExpressionStatement> () {
+                Some(exp_stmt) => {
+                    match exp_stmt.expression.as_any().downcast_ref::<InfixExpression>() {
+                        Some(infix_exp) => {
+                            assert_eq!(infix_exp.operator, test.operator);
+                            assert_eq!(test_boolean_literal(&infix_exp.right, test.right_value), true);
+                            assert_eq!(test_boolean_literal(&infix_exp.left, test.left_value), true);
+                        },
+                        None => panic!("failed to downcast an infix expression"),
+                    }
+                },
+                None => panic!("failed to downcast the expression statement"),
+            }
+        }
+    }
+
     struct ComplexExpressions(String, String);
 
     impl ComplexExpressions {
@@ -514,7 +602,16 @@ mod test {
             ComplexExpressions::new("3 + 4; -5 * 5", "(3 + 4)((-5) * 5)"),
             ComplexExpressions::new("5 > 4 == 3 < 4", "((5 > 4) == (3 < 4))"),
             ComplexExpressions::new("5 < 4 != 3 > 4", "((5 < 4) != (3 > 4))"),
-            ComplexExpressions::new("3 + 4 * 5 == 3 * 1 + 4 * 5", "((3 + (4 * 5)) == ((3 * 1) + (4 * 5)))")
+            ComplexExpressions::new("3 + 4 * 5 == 3 * 1 + 4 * 5", "((3 + (4 * 5)) == ((3 * 1) + (4 * 5)))"),
+            ComplexExpressions::new("true", "true"),
+            ComplexExpressions::new("false", "false"),
+            ComplexExpressions::new("3 > 2 == true", "((3 > 2) == true)"),
+            ComplexExpressions::new("3 < 5 == true", "((3 < 5) == true)"),
+            ComplexExpressions::new("1 + (2 + 3) + 4", "((1 + (2 + 3)) + 4)"),
+            ComplexExpressions::new("(5 + 5) * 2", "((5 + 5) * 2)"),
+            ComplexExpressions::new("2 / (5 + 5)", "(2 / (5 + 5))"),
+            ComplexExpressions::new("-(5 + 5)", "(-(5 + 5))"),
+            ComplexExpressions::new("!(true == true)", "(!(true == true))")
         ];
 
         for test in tests.iter() {
@@ -525,6 +622,28 @@ mod test {
 
             let actual = program.to_string();
             assert_eq!(actual, test.1);
+        }
+    }
+
+    #[test]
+    fn test_boolean_expression() {
+        let input = String::from("true;");
+        let lex = Lexer::new(input);
+        let mut parse = Parser::new(lex);
+        let program = parse.parse_program();
+        check_parser_errors(&parse);
+
+        match program.statements[0].as_any().downcast_ref::<ExpressionStatement>() {
+            Some(exp_stmt) => {
+                match exp_stmt.expression.as_any().downcast_ref::<Boolean>() {
+                    Some(boolean) => {
+                        assert_eq!(boolean.token_literal(), "true");
+                        assert_eq!(boolean.value, true);
+                    },
+                    None => panic!("Failed to downcast boolean expression"),
+                }
+            },
+            None => panic!("Failed to downcast statement expression"),
         }
     }
 }

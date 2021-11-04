@@ -262,6 +262,31 @@ impl Downcast for InfixExpression {
 
 impl Expression for InfixExpression {}
 
+pub struct Boolean {
+    pub token: Token,
+    pub value: bool,
+}
+
+impl Display for Boolean {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.value)
+    }
+}
+
+impl Node for Boolean {
+    fn token_literal(&self) -> String {
+        self.token.literal.clone()
+    }
+}
+
+impl Downcast for Boolean {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+}
+
+impl Expression for Boolean {}
+
 #[cfg(test)]
 mod test {
     use super::*;
