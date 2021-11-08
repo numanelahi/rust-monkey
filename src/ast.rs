@@ -287,6 +287,67 @@ impl Downcast for Boolean {
 
 impl Expression for Boolean {}
 
+pub struct IfExpression {
+    pub token: Token,
+    pub condition: Box<dyn Expression>,
+    pub consequence: BlockStatement,
+    pub alternative: Option<BlockStatement>,
+}
+
+impl Display for IfExpression {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let mut s = format!("if {} {}", self.condition.to_string(), self.consequence.to_string());
+        if let Some(alt) = &self.alternative {
+            s.push_str(" else ");
+            s.push_str(alt.to_string().as_str());
+        }
+        write!(f, "{}", s)
+    }
+}
+
+impl Node for IfExpression {
+    fn token_literal(&self) -> String {
+        self.token.literal.clone()
+    }
+}
+
+impl Downcast for IfExpression {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+}
+
+impl Expression for IfExpression {}
+
+pub struct BlockStatement {
+    pub token: Token,
+    pub statements: Vec<Box<dyn Statement>>
+}
+
+impl Display for BlockStatement {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let mut s = String::new();
+        for stmt in &self.statements {
+            s.push_str(stmt.to_string().as_str())
+        }
+        write!(f, "{}", s)
+    }
+}
+
+impl Node for BlockStatement {
+    fn token_literal(&self) -> String {
+        self.token.literal.clone()
+    }
+}
+
+impl Downcast for BlockStatement {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+}
+
+impl Statement for BlockStatement {}
+
 #[cfg(test)]
 mod test {
     use super::*;

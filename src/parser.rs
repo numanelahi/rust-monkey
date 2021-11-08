@@ -2,6 +2,7 @@ use crate::lexer::Lexer;
 use crate::token::{Token, TokenType};
 use crate::ast::{Program, Statement, Identifier, LetStatement, ReturnStatement, 
     ExpressionStatement, IntegerLiteral, PrefixExpression, InfixExpression,
+    IfExpression, BlockStatement,
     Boolean, ExpressionType, Expression, Node};
 
 
@@ -139,10 +140,9 @@ impl Parser {
     fn parse_grouped_expression(&mut self) -> Option<Box<dyn Expression>> {
         self.next_token();
         let exp = self.parse_expression(ExpressionType::LOWEST.get_value());
-        if !self.peek_token_is(TokenType::RPAREN) {
+        if !self.expect_peek(TokenType::RPAREN) {
             None
         } else {
-            self.next_token();
             exp
         } 
     }
@@ -181,6 +181,61 @@ impl Parser {
         })), false)
     }
 
+    fn parse_if_expresssion(&mut self) -> Option<Box<dyn Expression>> {
+        let current_token = self.current_token.clone();
+        if !self.expect_peek(TokenType::LPAREN) {
+            return None
+        }
+        self.next_token();
+        let condition: Box<dyn Expression> = self.parse_expression(ExpressionType::LOWEST.get_value()).unwrap();
+        if !self.expect_peek(TokenType::RPAREN) {
+            return None
+        }
+
+        if !self.expect_peek(TokenType::LBRACE) {
+            return None
+        }
+
+        let consequence = self.parse_block_statement();
+
+        let mut alternative: Option<BlockStatement> = None;
+
+        if self.peek_token_is(TokenType::ELSE) {
+            self.next_token();
+            
+            if !self.expect_peek(TokenType::LBRACE) {
+                return None
+            }
+
+            alternative = Some(self.parse_block_statement());
+        }
+
+        Some(Box::new(IfExpression{
+            token: current_token,
+            condition,
+            consequence,
+            alternative
+        }))
+    }
+
+    fn parse_block_statement(&mut self) -> BlockStatement {
+        let token = self.current_token.clone();
+        let mut stmts: Vec<Box<dyn Statement>> = Vec::new();
+        self.next_token();
+
+        while !self.current_token_is(TokenType::RBRACE) && !self.current_token_is(TokenType::EOF) {
+            let stmt = self.parse_statement();
+            if stmt.is_some() {
+                stmts.push(stmt.unwrap());
+            }
+            self.next_token();
+        }
+        BlockStatement{
+            token,
+            statements: stmts
+        }
+    }
+
     fn parse_prefix_fn_expressions(&mut self) -> Option<Box<dyn Expression>> {
         match self.current_token.token_type {
             TokenType::IDENT => self.parse_identifier(),
@@ -188,6 +243,7 @@ impl Parser {
             TokenType::MINUS | TokenType::BANG => self.parse_prefix_expression(),
             TokenType::TRUE | TokenType::FALSE => self.parse_boolean(),
             TokenType::LPAREN => self.parse_grouped_expression(),
+            TokenType::IF => self.parse_if_expresssion(),
             _ => {
                 self.parse_fn_error(&self.current_token.token_type.clone(), "prefix");
                 None
@@ -372,16 +428,19 @@ mod test {
         for stmt in program.statements {
             match stmt.as_any().downcast_ref::<ExpressionStatement>() {
                 Some(expr_stmt) => {
-                    match expr_stmt.expression.as_any().downcast_ref::<Identifier>() {
-                        Some(ident) => {
-                            assert_eq!(ident.token_literal(), "foobar".to_string());
-                            assert_eq!(ident.value, "foobar".to_string());
-                        },
-                        None => {panic!("Failed to downcase indentifier");},
-                    }
+                    assert_eq!(test_identifier(&expr_stmt.expression, "foobar".to_string()), true);
                 },
                 None => {panic!("No expression inside the expression statement");}
             }
+        }
+    }
+
+    fn test_identifier(exp: &Box<dyn Expression>, value: String) -> bool {
+        match exp.as_any().downcast_ref::<Identifier>() {
+            Some(iden) => {
+                iden.token_literal() == value && iden.value == value
+            }
+            None => false,
         }
     }
 
@@ -644,6 +703,42 @@ mod test {
                 }
             },
             None => panic!("Failed to downcast statement expression"),
+        }
+    }
+
+    #[test]
+    fn test_if_expression() {
+        let input = String::from("if (x < y) { x } else { y }");
+        let lex = Lexer::new(input);
+        let mut parse = Parser::new(lex);
+        let program = parse.parse_program();
+        check_parser_errors(&parse);
+
+        if program.statements.len() != 1 {
+            panic!("Expected there to be one statement");
+        }
+        assert_eq!(program.to_string(), "if (x < y) x else y");
+        match program.statements[0].as_any().downcast_ref::<ExpressionStatement>() {
+            Some(exp_stmt) => {
+                match exp_stmt.expression.as_any().downcast_ref::<IfExpression>() {
+                    Some(if_exp) => {
+                        
+                        assert_eq!(if_exp.condition.to_string(), "(x < y)");
+                        
+                        if if_exp.consequence.statements.len() != 1 {
+                            panic!("Expected there to be just one statement");
+                        }
+
+                        if let Some(exp_stmt) = if_exp.consequence.statements[0].as_any().downcast_ref::<ExpressionStatement> () {
+                            assert_eq!(test_identifier(&exp_stmt.expression, "x".to_string()), true);
+                        }
+
+                        assert_eq!(if_exp.alternative.is_some(), true);
+                    },
+                    None => panic!("Failed to downcast if expression"),
+                }
+            },
+            None => panic!("failed to downcast expression statement"),
         }
     }
 }
