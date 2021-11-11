@@ -2,7 +2,7 @@ use crate::lexer::Lexer;
 use crate::token::{Token, TokenType};
 use crate::ast::{Program, Statement, Identifier, LetStatement, ReturnStatement, 
     ExpressionStatement, IntegerLiteral, PrefixExpression, InfixExpression,
-    IfExpression, BlockStatement,
+    IfExpression, BlockStatement, FunctionLiteral,
     Boolean, ExpressionType, Expression, Node};
 
 
@@ -236,6 +236,59 @@ impl Parser {
         }
     }
 
+    fn parse_function_params(&mut self) -> Option<Vec<Identifier>> {
+        let mut idents: Vec<Identifier> = Vec::new();
+        if self.peek_token_is(TokenType::RPAREN) {
+            self.next_token();
+            return Some(idents)
+        }
+        self.next_token();
+        idents.push(Identifier{
+            token: self.current_token.clone(),
+            value: self.current_token.literal.clone(),
+        });
+
+        while self.peek_token_is(TokenType::COMMA) {
+            self.next_token();
+            self.next_token();
+            idents.push(Identifier{
+                token: self.current_token.clone(),
+                value: self.current_token.literal.clone(),
+            });
+        }
+        if !self.expect_peek(TokenType::RPAREN) {
+            return None
+        }
+        Some(idents)
+    }
+
+    fn parse_function_literal(&mut self) -> Option<Box<dyn Expression>> {
+        let token = self.current_token.clone();
+
+        if !self.expect_peek(TokenType::LPAREN) {
+            return None
+        }
+
+        let parameters: Vec<Identifier>;
+        if let Some(p) = self.parse_function_params() {
+            parameters = p;
+        } else {
+            return None
+        }
+
+        if !self.expect_peek(TokenType::LBRACE) {
+            return None
+        }
+
+        let body = self.parse_block_statement();
+
+        Some(Box::new(FunctionLiteral{
+            token, 
+            parameters,
+            body
+        }))
+    }
+
     fn parse_prefix_fn_expressions(&mut self) -> Option<Box<dyn Expression>> {
         match self.current_token.token_type {
             TokenType::IDENT => self.parse_identifier(),
@@ -244,6 +297,7 @@ impl Parser {
             TokenType::TRUE | TokenType::FALSE => self.parse_boolean(),
             TokenType::LPAREN => self.parse_grouped_expression(),
             TokenType::IF => self.parse_if_expresssion(),
+            TokenType::FUNCTION => self.parse_function_literal(),
             _ => {
                 self.parse_fn_error(&self.current_token.token_type.clone(), "prefix");
                 None
@@ -740,5 +794,26 @@ mod test {
             },
             None => panic!("failed to downcast expression statement"),
         }
+    }
+
+
+    #[test]
+    fn test_function_literal() {
+        let input = String::from("fn (x, y) { x + y; }");
+
+        let lex = Lexer::new(input);
+        let mut parse = Parser::new(lex);
+        let program = parse.parse_program();
+        check_parser_errors(&parse);
+
+        assert_eq!(program.statements.len(), 1);
+
+
+        let exp_stmt = program.statements[0].as_any().downcast_ref::<ExpressionStatement>().unwrap();
+
+        let function = exp_stmt.expression.as_any().downcast_ref::<FunctionLiteral>().unwrap();
+
+        assert_eq!(function.parameters.len(), 2);
+        assert_eq!(function.body.statements.len(), 1);
     }
 }

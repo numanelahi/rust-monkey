@@ -348,6 +348,39 @@ impl Downcast for BlockStatement {
 
 impl Statement for BlockStatement {}
 
+pub struct FunctionLiteral {
+    pub token: Token,
+    pub parameters: Vec<Identifier>,
+    pub body: BlockStatement,
+}
+
+impl Display for FunctionLiteral {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let mut param = String::new();
+        for (i, p) in self.parameters.iter().enumerate() {
+            param.push_str(p.to_string().as_str());
+            if i < self.parameters.len() - 1 {
+                param.push_str(", ");
+            }
+        }
+        write!(f, "{} ( {} ) {}", self.token.literal, param, self.body.to_string())
+    }
+}
+
+impl Node for FunctionLiteral {
+    fn token_literal(&self) -> String {
+        self.token.literal.clone()
+    }
+}
+
+impl Downcast for FunctionLiteral {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+}
+
+impl Expression for FunctionLiteral {}
+
 #[cfg(test)]
 mod test {
     use super::*;
