@@ -66,19 +66,20 @@ impl Parser {
         if !self.expect_peek(TokenType::ASSIGN) {
             return None
         }
-        while !self.current_token_is(TokenType::SEMICOLON) {
+        self.next_token();
+
+        let expression = self.parse_expression(ExpressionType::LOWEST.get_value());
+        if expression.is_none() {
+            return None
+        }
+        if self.peek_token_is(TokenType::SEMICOLON) {
             self.next_token();
         }
-
-        let expression = Identifier{
-            token: self.current_token.clone(),
-            value: self.current_token.literal.clone(),
-        };
 
         Some(Box::new(LetStatement{
            token: stmt_token,
            name: identifier,
-           value: Box::new(expression), 
+           value: expression.unwrap(), 
         }))
     }
 
@@ -86,17 +87,18 @@ impl Parser {
         let stmt_token: Token = self.current_token.clone();
 
         self.next_token();
-        while !self.current_token_is(TokenType::SEMICOLON) {
+
+        let value = self.parse_expression(ExpressionType::LOWEST.get_value());
+        if value.is_none() {
+            return None
+        }
+        if self.peek_token_is(TokenType::SEMICOLON) {
             self.next_token();
         }
 
-        let expression = Identifier{
-            token: self.current_token.clone(),
-            value: self.current_token.literal.clone(),
-        };
         Some(Box::new(ReturnStatement{
             token: stmt_token,
-            value: Box::new(expression),
+            value: value.unwrap(),
         }))
     }
 
