@@ -31,6 +31,7 @@ impl ExpressionType {
             TokenType::LT | TokenType::GT => Self::LESSGREATER.get_value(),
             TokenType::PLUS | TokenType::MINUS => Self::SUM.get_value(),
             TokenType::ASTERISK | TokenType::SLASH => Self::PRODUCT.get_value(),
+            TokenType::LPAREN => Self::CALL.get_value(),
             _ => Self::LOWEST.get_value(),
         };
         val
@@ -380,6 +381,40 @@ impl Downcast for FunctionLiteral {
 }
 
 impl Expression for FunctionLiteral {}
+
+
+pub struct CallExpression {
+    pub token: Token,
+    pub function: Box<dyn Expression>,
+    pub arguments: Vec<Box<dyn Expression>>
+}
+
+impl Display for CallExpression {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let mut args = String::new();
+        for (i, p) in self.arguments.iter().enumerate() {
+            args.push_str(p.to_string().as_str());
+            if i < self.arguments.len() - 1 {
+                args.push_str(", ");
+            }
+        }
+        write!(f, "{} ( {} )", self.function.to_string(), args)
+    }
+}
+
+impl Node for CallExpression {
+    fn token_literal(&self) -> String {
+        self.token.literal.clone()
+    }
+}
+
+impl Downcast for CallExpression {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+}
+
+impl Expression for CallExpression {}
 
 #[cfg(test)]
 mod test {

@@ -2,7 +2,7 @@ use crate::lexer::Lexer;
 use crate::token::{Token, TokenType};
 use crate::ast::{Program, Statement, Identifier, LetStatement, ReturnStatement, 
     ExpressionStatement, IntegerLiteral, PrefixExpression, InfixExpression,
-    IfExpression, BlockStatement, FunctionLiteral,
+    IfExpression, BlockStatement, FunctionLiteral, CallExpression,
     Boolean, ExpressionType, Expression, Node};
 
 
@@ -289,6 +289,44 @@ impl Parser {
         }))
     }
 
+    fn parse_call_expression(&mut self, left: Box<dyn Expression>) -> (Option<Box<dyn Expression>>, bool) {
+        self.next_token();
+        let token = self.current_token.clone();
+        match self.parse_call_arguments() {
+            Some(arguments) => {
+                (Some(Box::new(CallExpression{
+                    token,
+                    function: left,
+                    arguments
+                })), false)
+            },
+            None => (None, true),
+        }
+    }
+
+    fn parse_call_arguments(&mut self) -> Option<Vec<Box<dyn Expression>>> {
+        let mut args: Vec<Box<dyn Expression>> = Vec::new();
+        if self.peek_token_is(TokenType::RPAREN) {
+            self.next_token();
+            return Some(args);
+        }
+        self.next_token();
+        args.push(self.parse_expression(ExpressionType::LOWEST.get_value()).unwrap());
+
+        while self.peek_token_is(TokenType::COMMA) {
+            self.next_token();
+            self.next_token();
+            let arg = self.parse_expression(ExpressionType::LOWEST.get_value());
+            if arg.is_some() {
+                args.push(arg.unwrap());
+            }
+        }
+        if !self.expect_peek(TokenType::RPAREN) {
+            return None;
+        }
+        Some(args)
+    }
+
     fn parse_prefix_fn_expressions(&mut self) -> Option<Box<dyn Expression>> {
         match self.current_token.token_type {
             TokenType::IDENT => self.parse_identifier(),
@@ -310,6 +348,7 @@ impl Parser {
             TokenType::PLUS | TokenType::MINUS | TokenType::GT | TokenType::LT |
             TokenType::SLASH | TokenType::ASTERISK | TokenType::EQ | 
             TokenType::NOTEQ => self.parse_infix_expression(left),
+            TokenType::LPAREN => self.parse_call_expression(left),
             _ => {
                 self.parse_fn_error(&self.peek_token.token_type.clone(), "infix");
                 (Some(left), true)
@@ -724,7 +763,8 @@ mod test {
             ComplexExpressions::new("(5 + 5) * 2", "((5 + 5) * 2)"),
             ComplexExpressions::new("2 / (5 + 5)", "(2 / (5 + 5))"),
             ComplexExpressions::new("-(5 + 5)", "(-(5 + 5))"),
-            ComplexExpressions::new("!(true == true)", "(!(true == true))")
+            ComplexExpressions::new("!(true == true)", "(!(true == true))"),
+            ComplexExpressions::new("a + add(b * c) + d", "((a + add ( (b * c) )) + d)")
         ];
 
         for test in tests.iter() {
@@ -815,5 +855,26 @@ mod test {
 
         assert_eq!(function.parameters.len(), 2);
         assert_eq!(function.body.statements.len(), 1);
+    }
+
+    #[test]
+    fn test_call_expression() {
+        let input = String::from("add(1, 2 * 3, 4 + 5);");
+
+        let lex = Lexer::new(input);
+        let mut parse = Parser::new(lex);
+        let program = parse.parse_program();
+        check_parser_errors(&parse);
+
+        assert_eq!(program.statements.len(), 1);
+
+        let exp_stmt = program.statements[0].as_any().downcast_ref::<ExpressionStatement>().unwrap();
+        let call_exp = exp_stmt.expression.as_any().downcast_ref::<CallExpression>().unwrap();
+
+        assert_eq!(test_identifier(&call_exp.function, "add".to_string()), true);
+        assert_eq!(call_exp.arguments.len(), 3);
+        assert_eq!(call_exp.arguments[0].to_string(), "1");
+        assert_eq!(call_exp.arguments[1].to_string(), "(2 * 3)");
+        assert_eq!(call_exp.arguments[2].to_string(), "(4 + 5)");
     }
 }
