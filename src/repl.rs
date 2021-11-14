@@ -23,7 +23,9 @@ pub fn start() {
 }
 
 fn print_parse_errors(errors: &Vec<String>) {
+    println!("Whoops! We ran into some monkey business here!");
+    println!("  parse errors:");
     for error in errors.iter() {
-        println!("\t{}\n", error);
+        println!("\t{}", error);
     }
 }
