@@ -764,7 +764,9 @@ mod test {
             ComplexExpressions::new("2 / (5 + 5)", "(2 / (5 + 5))"),
             ComplexExpressions::new("-(5 + 5)", "(-(5 + 5))"),
             ComplexExpressions::new("!(true == true)", "(!(true == true))"),
-            ComplexExpressions::new("a + add(b * c) + d", "((a + add ( (b * c) )) + d)")
+            ComplexExpressions::new("a + add(b * c) + d", "((a + add((b * c))) + d)"),
+            ComplexExpressions::new("add(a, b, 1, 2 * 3, 4 + 5, add(6, 7 * 8))", "add(a, b, 1, (2 * 3), (4 + 5), add(6, (7 * 8)))"),
+            ComplexExpressions::new("add(a + b + c * d / f + g)", "add((((a + b) + ((c * d) / f)) + g))")
         ];
 
         for test in tests.iter() {

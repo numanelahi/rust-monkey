@@ -398,7 +398,7 @@ impl Display for CallExpression {
                 args.push_str(", ");
             }
         }
-        write!(f, "{} ( {} )", self.function.to_string(), args)
+        write!(f, "{}({})", self.function.to_string(), args)
     }
 }
 
