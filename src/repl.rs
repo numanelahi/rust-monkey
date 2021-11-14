@@ -1,6 +1,6 @@
 use std::io;
 use crate::lexer::Lexer;
-use crate::token::TokenType;
+use crate::parser::Parser;
 
 pub fn start() {
     loop {
@@ -10,13 +10,20 @@ pub fn start() {
                 println!("{}", error);
             },
             _ => {
-                let mut l = Lexer::new(line);
-                let mut tok = l.next_token();
-                while tok.token_type != TokenType::EOF {
-                    println!("{}", tok);
-                    tok = l.next_token();
+                let l = Lexer::new(line);
+                let mut parse = Parser::new(l);
+                let program = parse.parse_program();
+                if parse.errors.len() != 0 {
+                    print_parse_errors(&parse.errors);
                 }
+                println!("{}", program.to_string());
             },
         }
+    }
+}
+
+fn print_parse_errors(errors: &Vec<String>) {
+    for error in errors.iter() {
+        println!("\t{}\n", error);
     }
 }

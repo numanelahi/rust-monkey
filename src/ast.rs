@@ -55,14 +55,6 @@ pub struct Program {
     pub statements: Vec<Box<dyn Statement>>,
 }
 
-impl Program {
-    fn new() -> Self {
-        Self{
-            statements: Vec::new(),
-        }
-    }
-}
-
 impl Display for Program {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mut program_str: String = String::new();
@@ -420,6 +412,14 @@ impl Expression for CallExpression {}
 mod test {
     use super::*;
     use crate::token::{Token, TokenType};
+
+    impl Program {
+        fn new() -> Self {
+            Self{
+                statements: Vec::new(),
+            }
+        }
+    }
 
     #[test]
     fn test_program_string() {

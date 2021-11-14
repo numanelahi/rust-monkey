@@ -3,7 +3,7 @@ use crate::token::{Token, TokenType};
 use crate::ast::{Program, Statement, Identifier, LetStatement, ReturnStatement, 
     ExpressionStatement, IntegerLiteral, PrefixExpression, InfixExpression,
     IfExpression, BlockStatement, FunctionLiteral, CallExpression,
-    Boolean, ExpressionType, Expression, Node};
+    Boolean, ExpressionType, Expression};
 
 
 
@@ -16,7 +16,7 @@ pub struct Parser {
 }
 
 impl Parser {
-    fn new(l: Lexer) -> Parser {
+    pub fn new(l: Lexer) -> Parser {
         let mut p = Parser {
             l,
             ..Default::default()
@@ -426,6 +426,7 @@ impl Parser {
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::ast::Node;
 
     struct ExpectedIdentifier {
         identifier: String,
